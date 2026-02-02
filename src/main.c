@@ -122,7 +122,7 @@ static int cmd_send_key(const struct shell *sh, size_t argc, char **argv) {
     return 0;
 }
 
-// SHELL_CMD_REGISTER(send, NULL, "Send keycode: send <hex>", cmd_send_key);
+SHELL_CMD_REGISTER(send, NULL, "Send keycode: send <hex>", cmd_send_key);
 
 int main(void) {
 	int err;
