@@ -8,8 +8,45 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/shell/shell.h>
 
+enum {
+	HIDS_REMOTE_WAKE = BIT(0),
+	HIDS_NORMALLY_CONNECTABLE = BIT(1),
+};
+
+/* HID 信息 */
+struct hids_info {
+    uint16_t bcd_hid;
+    uint8_t  b_country_code;
+    uint8_t  flags;
+} __packed;
+
+struct hids_report {
+	uint8_t id; /* report id */
+	uint8_t type; /* report type */
+} __packed;
+
+static struct hids_info info = {
+    .bcd_hid = 0x0111,
+    .b_country_code = 0x00,
+    .flags = 0x01,
+};
+
+enum {
+	HIDS_INPUT = 0x01,
+	HIDS_OUTPUT = 0x02,
+	HIDS_FEATURE = 0x03,
+};
+
+static struct hids_report input = {
+	.id = 0x01,
+	.type = HIDS_INPUT,
+};
+
+static uint8_t simulate_input_allow;
+static uint8_t ctrl_point;
+
 /* HID 报告描述符: 键盘 */
-static const uint8_t hid_report_map[] = {
+static const uint8_t report_map[] = {
     0x05, 0x01, 0x09, 0x06, 0xa1, 0x01, 0x05, 0x07,
     0x19, 0xe0, 0x29, 0xe7, 0x15, 0x00, 0x25, 0x01,
     0x75, 0x01, 0x95, 0x08, 0x81, 0x02, 0x95, 0x01,
@@ -18,18 +55,69 @@ static const uint8_t hid_report_map[] = {
     0x29, 0x65, 0x81, 0x00, 0xc0
 };
 
-/* HID 信息 */
-struct hid_info {
-    uint16_t bcd_hid;
-    uint8_t  b_country_code;
-    uint8_t  flags;
-} __packed;
+static ssize_t read_info(struct bt_conn *conn,
+			  const struct bt_gatt_attr *attr, void *buf,
+			  uint16_t len, uint16_t offset)
+{
+    printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
+    
+	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
+				             sizeof(struct hids_info));
+}
 
-static const struct hid_info info = {
-    .bcd_hid = 0x0111,
-    .b_country_code = 0x00,
-    .flags = 0x01,
-};
+static ssize_t read_report_map(struct bt_conn *conn,
+			       const struct bt_gatt_attr *attr, void *buf,
+			       uint16_t len, uint16_t offset)
+{
+    printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
+
+	return bt_gatt_attr_read(conn, attr, buf, len, offset, report_map,
+				 sizeof(report_map));
+}
+
+static ssize_t read_report(struct bt_conn *conn,
+			   const struct bt_gatt_attr *attr, void *buf,
+			   uint16_t len, uint16_t offset)
+{
+    printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
+
+	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
+				 sizeof(struct hids_report));
+}
+
+static void input_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+    printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
+
+	simulate_input_allow = (value == BT_GATT_CCC_NOTIFY) ? 1 : 0;
+}
+
+static ssize_t read_input_report(struct bt_conn *conn,
+				 const struct bt_gatt_attr *attr, void *buf,
+				 uint16_t len, uint16_t offset)
+{
+    printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
+
+	return bt_gatt_attr_read(conn, attr, buf, len, offset, NULL, 0);
+}
+
+static ssize_t write_ctrl_point(struct bt_conn *conn,
+				const struct bt_gatt_attr *attr,
+				const void *buf, uint16_t len, uint16_t offset,
+				uint8_t flags)
+{
+	uint8_t *value = attr->user_data;
+
+    printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
+
+	if (offset + len > sizeof(ctrl_point)) {
+		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+	}
+
+	memcpy(value + offset, buf, len);
+
+	return len;
+}
 
 /* 定义广播数据 (Advertising Data) */
 static const struct bt_data ad[] = {
@@ -48,23 +136,36 @@ static const struct bt_data sd[] = {
 
 /* GATT 属性定义 */
 static uint8_t report_val[8]; // 键盘报告数据缓冲区
-
 BT_GATT_SERVICE_DEFINE(hid_svc,
     BT_GATT_PRIMARY_SERVICE(BT_UUID_HIDS),
-    // HID 信息
-    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
-                           BT_GATT_PERM_READ, NULL, NULL, (void *)&info),
-    // 报告描述符
-    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT_MAP, BT_GATT_CHRC_READ,
-                           BT_GATT_PERM_READ, NULL, NULL, (void *)hid_report_map),
-    // 实际报告值 (Input Report)
-    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-                           BT_GATT_PERM_READ_AUTHEN, NULL, NULL, report_val),
-    BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-    // 协议模式 (Required for HIDS)
-    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT, BT_GATT_CHRC_WRITE_WITHOUT_RESP,
-                           BT_GATT_PERM_WRITE, NULL, NULL, NULL)
+
+    // HID Info (Index 1, 2)
+	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
+			               BT_GATT_PERM_READ, read_info, NULL, &info),
+
+    // Report Map (Index 3, 4)
+	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT_MAP, BT_GATT_CHRC_READ,
+			               BT_GATT_PERM_READ, read_report_map, NULL, NULL),
+
+    // Report Value (Index 5, 6)
+	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+			               BT_GATT_PERM_READ_AUTHEN, read_input_report, NULL, NULL),
+
+    // Report Reference (Index 7)
+	BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ,
+			           read_report, NULL, &input),
+
+    // CCC (Index 8)
+	// BT_GATT_CCC(input_ccc_changed, SAMPLE_BT_PERM_READ | SAMPLE_BT_PERM_WRITE),
+	BT_GATT_CCC(input_ccc_changed, BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN),
+
+    // Control Point (Index 9, 10)
+	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT,
+                           BT_GATT_CHRC_WRITE_WITHOUT_RESP,
+                           BT_GATT_PERM_WRITE,
+                           NULL, write_ctrl_point, &ctrl_point),
 );
+
 
 /* 蓝牙连接回调 */
 static void connected(struct bt_conn *conn, uint8_t err)
