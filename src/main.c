@@ -151,13 +151,14 @@ BT_GATT_SERVICE_DEFINE(hid_svc,
 	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 			               BT_GATT_PERM_READ_AUTHEN, read_input_report, NULL, NULL),
 
-    // Report Reference (Index 7)
-	BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ,
-			           read_report, NULL, &input),
-
-    // CCC (Index 8)
+    // CCC (Index 7)
 	// BT_GATT_CCC(input_ccc_changed, SAMPLE_BT_PERM_READ | SAMPLE_BT_PERM_WRITE),
 	BT_GATT_CCC(input_ccc_changed, BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN),
+
+
+    // Report Reference (Index 8)
+	BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ,
+			           read_report, NULL, &input),
 
     // Control Point (Index 9, 10)
 	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT,
@@ -202,24 +203,46 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.disconnected = disconnected,
 };
 
-/* Shell 命令实现 */
+static struct bt_gatt_attr *report_decl = NULL;
+static inline struct bt_gatt_attr * get_attrs(void)
+{
+    if (!report_decl) {
+        report_decl = bt_gatt_find_by_uuid(hid_svc.attrs, hid_svc.attr_count, BT_UUID_HIDS_REPORT);
+        if (!report_decl) {
+            printk("Error: HID Report Characteristic not found\n");
+            return NULL;
+        }
+    }
+
+    return report_decl + 1;
+}
+
 static int cmd_send_key(const struct shell *sh, size_t argc, char **argv) {
     if (argc < 2) return -EINVAL;
 
     uint8_t key = (uint8_t)strtol(argv[1], NULL, 16);
+
+    struct bt_gatt_attr * rpt_val_att = get_attrs();
+    if (!report_decl) {
+        printk("Error: HID Report Characteristic not found\n");
+        return -1;
+    }
     
     // 1. 按下按键
     memset(report_val, 0, 8);
     report_val[2] = key;
-    bt_gatt_notify(NULL, &hid_svc.attrs[5], report_val, 8); // attrs[5] 对应 Report 属性
+    //bt_gatt_notify(NULL, rpt_val_att, report_val, 8);
+    bt_gatt_notify(NULL, &hid_svc.attrs[6], report_val, sizeof(report_val));
 
     k_msleep(50);
 
     // 2. 松开按键
     memset(report_val, 0, 8);
-    bt_gatt_notify(NULL, &hid_svc.attrs[5], report_val, 8);
+    //bt_gatt_notify(NULL, rpt_val_att, report_val, 8);
+    bt_gatt_notify(NULL, &hid_svc.attrs[6], report_val, sizeof(report_val));
 
     shell_print(sh, "Sent keycode 0x%02x", key);
+
     return 0;
 }
 
