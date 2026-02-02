@@ -1,0 +1,18 @@
+sample:
+  name: BLE Remount control
+  description: a ble RC
+common:
+  min_ram: 2
+  min_flash: 16
+  tags: introduction
+  integration_platforms:
+    - native_sim
+  harness: console
+tests:
+  sample.bluetooth.ble_rc:
+    harness: bluetooth
+  sample.bluetooth.ble_rc.no_authentication:
+    harness: bluetooth
+    extra_configs:
+      - CONFIG_SAMPLE_BT_USE_AUTHENTICATION=n
+    tags: bluetooth
