@@ -50,7 +50,7 @@ static const uint8_t report_map[] = {
     0x05, 0x01,       /* Usage Page (Generic Desktop) - 通用桌面设备 */
     0x09, 0x06,       /* Usage (Keyboard) - 明确是一个键盘 */
     0xa1, 0x01,       /* Collection (Application) - 开始应用集合 */
-    
+
         /* Byte 0 */
         0x05, 0x07,       /* Usage Page (Key Codes) - 使用按键码页面 */
         0x19, 0xe0,       /* Usage Minimum (224) - 对应左 Ctrl */
@@ -61,7 +61,7 @@ static const uint8_t report_map[] = {
         0x95, 0x08,       /* Report Count (8) - 总共 8 个按键 (刚好 1 字节) */
         0x81, 0x02,       /* Input (Data, Variable, Absolute) - 变量输入 */
 
-        
+
         /* Byte 1 */
         0x95, 0x01,       /* Report Count (1) - 1 个单位 */
         0x75, 0x08,       /* Report Size (8) - 占 8 bit (1 字节) */
@@ -85,7 +85,7 @@ static ssize_t read_info(struct bt_conn *conn,
 			  uint16_t len, uint16_t offset)
 {
     printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
-    
+
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
 				             sizeof(struct hids_info));
 }
@@ -254,7 +254,7 @@ static int cmd_send_key(const struct shell *sh, size_t argc, char **argv) {
         printk("Error: HID Report Characteristic not found\n");
         return -1;
     }
-    
+
     // 1. 按下按键
     memset(report_val, 0, 8);
     report_val[2] = key;
