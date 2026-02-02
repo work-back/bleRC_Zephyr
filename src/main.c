@@ -47,12 +47,37 @@ static uint8_t ctrl_point;
 
 /* HID 报告描述符: 键盘 */
 static const uint8_t report_map[] = {
-    0x05, 0x01, 0x09, 0x06, 0xa1, 0x01, 0x05, 0x07,
-    0x19, 0xe0, 0x29, 0xe7, 0x15, 0x00, 0x25, 0x01,
-    0x75, 0x01, 0x95, 0x08, 0x81, 0x02, 0x95, 0x01,
-    0x75, 0x08, 0x81, 0x01, 0x95, 0x06, 0x75, 0x08,
-    0x15, 0x00, 0x25, 0x65, 0x05, 0x07, 0x19, 0x00,
-    0x29, 0x65, 0x81, 0x00, 0xc0
+    0x05, 0x01,       /* Usage Page (Generic Desktop) - 通用桌面设备 */
+    0x09, 0x06,       /* Usage (Keyboard) - 明确是一个键盘 */
+    0xa1, 0x01,       /* Collection (Application) - 开始应用集合 */
+    
+        /* Byte 0 */
+        0x05, 0x07,       /* Usage Page (Key Codes) - 使用按键码页面 */
+        0x19, 0xe0,       /* Usage Minimum (224) - 对应左 Ctrl */
+        0x29, 0xe7,       /* Usage Maximum (231) - 对应右 GUI (Win键) */
+        0x15, 0x00,       /* Logical Minimum (0) - 最小值 0 (没按) */
+        0x25, 0x01,       /* Logical Maximum (1) - 最大值 1 (按了) */
+        0x75, 0x01,       /* Report Size (1) - 每个按键占 1 bit */
+        0x95, 0x08,       /* Report Count (8) - 总共 8 个按键 (刚好 1 字节) */
+        0x81, 0x02,       /* Input (Data, Variable, Absolute) - 变量输入 */
+
+        
+        /* Byte 1 */
+        0x95, 0x01,       /* Report Count (1) - 1 个单位 */
+        0x75, 0x08,       /* Report Size (8) - 占 8 bit (1 字节) */
+        0x81, 0x01,       /* Input (Constant) - 常量输入 (填充用) */
+
+        /* Byte 2-7 */
+        0x95, 0x06,       /* Report Count (6) - 允许同时按下 6 个键 */
+        0x75, 0x08,       /* Report Size (8) - 每个键占 8 bit (1 字节) */
+        0x15, 0x00,       /* Logical Minimum (0) */
+        0x25, 0xff,       /* Logical Maximum (255) - 允许的最大键值是 255 (0xff) */
+        0x05, 0x07,       /* Usage Page (Key Codes) */
+        0x19, 0x00,       /* Usage Minimum (0) */
+        0x29, 0xff,       /* Usage Maximum (255) - 允许的最大 Usage 也是 255 (0xff) */
+        0x81, 0x00,       /* Input (Data, Array) - 数组输入 */
+
+    0xc0              /* End Collection - 结束应用集合 */
 };
 
 static ssize_t read_info(struct bt_conn *conn,
@@ -149,11 +174,13 @@ BT_GATT_SERVICE_DEFINE(hid_svc,
 
     // Report Value (Index 5, 6)
 	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-			               BT_GATT_PERM_READ_AUTHEN, read_input_report, NULL, NULL),
+			               BT_GATT_PERM_READ /* _AUTHEN */ ,
+                           /* _AUTHEN 对应的安全等级为 BT_SECURITY_L3, 否则 对端会有: Error Code: Insufficient Authentication (0x05) */
+                           read_input_report, NULL, NULL),
 
     // CCC (Index 7)
 	// BT_GATT_CCC(input_ccc_changed, SAMPLE_BT_PERM_READ | SAMPLE_BT_PERM_WRITE),
-	BT_GATT_CCC(input_ccc_changed, BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN),
+	BT_GATT_CCC(input_ccc_changed, BT_GATT_PERM_READ /* _AUTHEN */ | BT_GATT_PERM_WRITE /* _AUTHEN */ ),
 
 
     // Report Reference (Index 8)
