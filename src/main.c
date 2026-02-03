@@ -10,8 +10,8 @@
 #include <zephyr/settings/settings.h>
 
 enum {
-	HIDS_REMOTE_WAKE = BIT(0),
-	HIDS_NORMALLY_CONNECTABLE = BIT(1),
+    HIDS_REMOTE_WAKE = BIT(0),
+    HIDS_NORMALLY_CONNECTABLE = BIT(1),
 };
 
 /* HID 信息 */
@@ -22,8 +22,8 @@ struct hids_info {
 } __packed;
 
 struct hids_report {
-	uint8_t id; /* report id */
-	uint8_t type; /* report type */
+    uint8_t id; /* report id */
+    uint8_t type; /* report type */
 } __packed;
 
 static struct hids_info info = {
@@ -33,14 +33,14 @@ static struct hids_info info = {
 };
 
 enum {
-	HIDS_INPUT = 0x01,
-	HIDS_OUTPUT = 0x02,
-	HIDS_FEATURE = 0x03,
+    HIDS_INPUT = 0x01,
+    HIDS_OUTPUT = 0x02,
+    HIDS_FEATURE = 0x03,
 };
 
 static struct hids_report input = {
-	.id = 0x01,
-	.type = HIDS_INPUT,
+    .id = 0x01,
+    .type = HIDS_INPUT,
 };
 
 static uint8_t simulate_input_allow;
@@ -139,67 +139,67 @@ static volatile bool is_adv_running;
 static struct k_work adv_work;
 
 static ssize_t read_info(struct bt_conn *conn,
-			  const struct bt_gatt_attr *attr, void *buf,
-			  uint16_t len, uint16_t offset)
+              const struct bt_gatt_attr *attr, void *buf,
+              uint16_t len, uint16_t offset)
 {
     printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
 
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
-				             sizeof(struct hids_info));
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
+                             sizeof(struct hids_info));
 }
 
 static ssize_t read_report_map(struct bt_conn *conn,
-			       const struct bt_gatt_attr *attr, void *buf,
-			       uint16_t len, uint16_t offset)
+                   const struct bt_gatt_attr *attr, void *buf,
+                   uint16_t len, uint16_t offset)
 {
     printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
 
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, report_map,
-				 sizeof(report_map));
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, report_map,
+                 sizeof(report_map));
 }
 
 static ssize_t read_report(struct bt_conn *conn,
-			   const struct bt_gatt_attr *attr, void *buf,
-			   uint16_t len, uint16_t offset)
+               const struct bt_gatt_attr *attr, void *buf,
+               uint16_t len, uint16_t offset)
 {
     printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
 
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
-				 sizeof(struct hids_report));
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
+                 sizeof(struct hids_report));
 }
 
 static void input_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
     printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
 
-	simulate_input_allow = (value == BT_GATT_CCC_NOTIFY) ? 1 : 0;
+    simulate_input_allow = (value == BT_GATT_CCC_NOTIFY) ? 1 : 0;
 }
 
 static ssize_t read_input_report(struct bt_conn *conn,
-				 const struct bt_gatt_attr *attr, void *buf,
-				 uint16_t len, uint16_t offset)
+                 const struct bt_gatt_attr *attr, void *buf,
+                 uint16_t len, uint16_t offset)
 {
     printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
 
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, NULL, 0);
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, NULL, 0);
 }
 
 static ssize_t write_ctrl_point(struct bt_conn *conn,
-				const struct bt_gatt_attr *attr,
-				const void *buf, uint16_t len, uint16_t offset,
-				uint8_t flags)
+                const struct bt_gatt_attr *attr,
+                const void *buf, uint16_t len, uint16_t offset,
+                uint8_t flags)
 {
-	uint8_t *value = attr->user_data;
+    uint8_t *value = attr->user_data;
 
     printk("[GATT SRV CB] ----> Handle [%s]\n", __func__);
 
-	if (offset + len > sizeof(ctrl_point)) {
-		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
-	}
+    if (offset + len > sizeof(ctrl_point)) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+    }
 
-	memcpy(value + offset, buf, len);
+    memcpy(value + offset, buf, len);
 
-	return len;
+    return len;
 }
 
 int g_id = -1;
@@ -225,30 +225,30 @@ BT_GATT_SERVICE_DEFINE(hid_svc,
     BT_GATT_PRIMARY_SERVICE(BT_UUID_HIDS),
 
     // HID Info (Index 1, 2)
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
-			               BT_GATT_PERM_READ, read_info, NULL, &info),
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
+                           BT_GATT_PERM_READ, read_info, NULL, &info),
 
     // Report Map (Index 3, 4)
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT_MAP, BT_GATT_CHRC_READ,
-			               BT_GATT_PERM_READ, read_report_map, NULL, NULL),
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT_MAP, BT_GATT_CHRC_READ,
+                           BT_GATT_PERM_READ, read_report_map, NULL, NULL),
 
     // Report Value (Index 5, 6)
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-			               BT_GATT_PERM_READ /* _AUTHEN */ ,
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+                           BT_GATT_PERM_READ /* _AUTHEN */ ,
                            /* _AUTHEN 对应的安全等级为 BT_SECURITY_L3, 否则 对端会有: Error Code: Insufficient Authentication (0x05) */
                            read_input_report, NULL, NULL),
 
     // CCC (Index 7)
-	// BT_GATT_CCC(input_ccc_changed, SAMPLE_BT_PERM_READ | SAMPLE_BT_PERM_WRITE),
-	BT_GATT_CCC(input_ccc_changed, BT_GATT_PERM_READ /* _AUTHEN */ | BT_GATT_PERM_WRITE /* _AUTHEN */ ),
+    // BT_GATT_CCC(input_ccc_changed, SAMPLE_BT_PERM_READ | SAMPLE_BT_PERM_WRITE),
+    BT_GATT_CCC(input_ccc_changed, BT_GATT_PERM_READ /* _AUTHEN */ | BT_GATT_PERM_WRITE /* _AUTHEN */ ),
 
 
     // Report Reference (Index 8)
-	BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ,
-			           read_report, NULL, &input),
+    BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ,
+                       read_report, NULL, &input),
 
     // Control Point (Index 9, 10)
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT,
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT,
                            BT_GATT_CHRC_WRITE_WITHOUT_RESP,
                            BT_GATT_PERM_WRITE,
                            NULL, write_ctrl_point, &ctrl_point),
@@ -257,122 +257,122 @@ BT_GATT_SERVICE_DEFINE(hid_svc,
 
 static void advertising_continue(void)
 {
-	struct bt_le_adv_param adv_param;
+    struct bt_le_adv_param adv_param;
 
 #if CONFIG_BT_DIRECTED_ADVERTISING
-	bt_addr_le_t addr;
+    bt_addr_le_t addr;
 
-	if (!k_msgq_get(&bonds_queue, &addr, K_NO_WAIT)) {
-		char addr_buf[BT_ADDR_LE_STR_LEN];
-		int err;
+    if (!k_msgq_get(&bonds_queue, &addr, K_NO_WAIT)) {
+        char addr_buf[BT_ADDR_LE_STR_LEN];
+        int err;
 
-		if (is_adv_running) {
-			err = bt_le_adv_stop();
-			if (err) {
-				printk("Advertising failed to stop (err %d)\n", err);
-				return;
-			}
-			is_adv_running = false;
-		}
+        if (is_adv_running) {
+            err = bt_le_adv_stop();
+            if (err) {
+                printk("Advertising failed to stop (err %d)\n", err);
+                return;
+            }
+            is_adv_running = false;
+        }
 
-		adv_param = *BT_LE_ADV_CONN_DIR(&addr);
-		adv_param.options |= BT_LE_ADV_OPT_DIR_ADDR_RPA;
+        adv_param = *BT_LE_ADV_CONN_DIR(&addr);
+        adv_param.options |= BT_LE_ADV_OPT_DIR_ADDR_RPA;
 
 
-		err = bt_le_adv_start(&adv_param, NULL, 0, NULL, 0);
+        err = bt_le_adv_start(&adv_param, NULL, 0, NULL, 0);
 
-		if (err) {
-			printk("Directed advertising failed to start (err %d)\n", err);
-			return;
-		}
+        if (err) {
+            printk("Directed advertising failed to start (err %d)\n", err);
+            return;
+        }
 
-		bt_addr_le_to_str(&addr, addr_buf, BT_ADDR_LE_STR_LEN);
-		printk("Direct advertising to %s started\n", addr_buf);
-	} else
+        bt_addr_le_to_str(&addr, addr_buf, BT_ADDR_LE_STR_LEN);
+        printk("Direct advertising to %s started\n", addr_buf);
+    } else
 #endif
-	{
-		int err;
+    {
+        int err;
 
-		if (is_adv_running) {
-			return;
-		}
+        if (is_adv_running) {
+            return;
+        }
 
-		adv_param = *BT_LE_ADV_CONN_FAST_1;
-		adv_param.options |= BT_LE_ADV_OPT_USE_IDENTITY;
-		if (g_id >= 0) {
-			printk("Use mac form g_id!\n");
-			adv_param.id = g_id;
-		}
+        adv_param = *BT_LE_ADV_CONN_FAST_1;
+        adv_param.options |= BT_LE_ADV_OPT_USE_IDENTITY;
+        if (g_id >= 0) {
+            printk("Use mac form g_id!\n");
+            adv_param.id = g_id;
+        }
 
-		err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-		if (err) {
-			printk("Advertising failed to start (err %d)\n", err);
-			return;
-		}
+        err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+        if (err) {
+            printk("Advertising failed to start (err %d)\n", err);
+            return;
+        }
 
-		printk("Regular advertising started\n");
-	}
+        printk("Regular advertising started\n");
+    }
 
-	is_adv_running = true;
+    is_adv_running = true;
 }
 
 static void advertising_start(void)
 {
 #if CONFIG_BT_DIRECTED_ADVERTISING
-	k_msgq_purge(&bonds_queue);
-	bt_foreach_bond(BT_ID_DEFAULT, bond_find, NULL);
+    k_msgq_purge(&bonds_queue);
+    bt_foreach_bond(BT_ID_DEFAULT, bond_find, NULL);
 #endif
 
-	k_work_submit(&adv_work);
+    k_work_submit(&adv_work);
 }
 
 static void advertising_process(struct k_work *work)
 {
-	advertising_continue();
+    advertising_continue();
 }
 
 /* 蓝牙连接回调 */
 static void connected(struct bt_conn *conn, uint8_t err)
 {
-	char addr[BT_ADDR_LE_STR_LEN];
+    char addr[BT_ADDR_LE_STR_LEN];
 
-	is_adv_running = false;
+    is_adv_running = false;
 
-	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	if (err) {
-		if (err == BT_HCI_ERR_ADV_TIMEOUT) {
-			printk("Direct advertising to %s timed out\n", addr);
-			k_work_submit(&adv_work);
-		} else {
-			printk("Failed to connect to %s 0x%02x %s\n", addr, err,
-			       bt_hci_err_to_str(err));
-		}
-		return;
-	}
+    if (err) {
+        if (err == BT_HCI_ERR_ADV_TIMEOUT) {
+            printk("Direct advertising to %s timed out\n", addr);
+            k_work_submit(&adv_work);
+        } else {
+            printk("Failed to connect to %s 0x%02x %s\n", addr, err,
+                   bt_hci_err_to_str(err));
+        }
+        return;
+    }
 
-	printk("Connected %s\n", addr);
+    printk("Connected %s\n", addr);
 
-	if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
-		printk("Failed to set security\n");
-	}
+    if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
+        printk("Failed to set security\n");
+    }
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	char addr[BT_ADDR_LE_STR_LEN];
+    char addr[BT_ADDR_LE_STR_LEN];
 
-	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	printk("Disconnected from %s, reason 0x%02x %s\n", addr,
-	       reason, bt_hci_err_to_str(reason));
+    printk("Disconnected from %s, reason 0x%02x %s\n", addr,
+           reason, bt_hci_err_to_str(reason));
 
-	advertising_start();
+    advertising_start();
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
     .connected = connected,
-	.disconnected = disconnected,
+    .disconnected = disconnected,
 };
 
 static struct bt_gatt_attr *report_decl = NULL;
@@ -421,34 +421,34 @@ static int cmd_send_key(const struct shell *sh, size_t argc, char **argv) {
 SHELL_CMD_REGISTER(send, NULL, "Send keycode: send <hex>", cmd_send_key);
 
 int main(void) {
-	int err;
+    int err;
 
     err = bt_enable(NULL);
-	if (err) {
-		printk("Bluetooth init failed (err %d)\n", err);
-		return 0;
-	}
+    if (err) {
+        printk("Bluetooth init failed (err %d)\n", err);
+        return 0;
+    }
 
     #if 0
     err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-	if (err) {
-		printk("Advertising failed to start (err %d)\n", err);
-		return 0;
-	}
+    if (err) {
+        printk("Advertising failed to start (err %d)\n", err);
+        return 0;
+    }
 
-	printk("Advertising successfully started\n");
+    printk("Advertising successfully started\n");
     #endif
 
-	k_work_init(&adv_work, advertising_process);
+    k_work_init(&adv_work, advertising_process);
 
-	advertising_start();
+    advertising_start();
 
-	if (IS_ENABLED(CONFIG_SETTINGS)) {
-		settings_load();
-	}
+    if (IS_ENABLED(CONFIG_SETTINGS)) {
+        settings_load();
+    }
 
     while(1) {
-		k_sleep(K_MSEC(1000));
+        k_sleep(K_MSEC(1000));
     }
 
     return 0;
