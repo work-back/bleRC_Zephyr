@@ -203,6 +203,7 @@ static ssize_t write_ctrl_point(struct bt_conn *conn,
 }
 
 int g_id = -1;
+static volatile bool g_wakeup_adv_mode = false;
 
 /* 定义广播数据 (Advertising Data) */
 static const struct bt_data ad[] = {
@@ -217,6 +218,19 @@ static const struct bt_data ad[] = {
 /* 定义扫描响应数据 (Scan Response Data) */
 static const struct bt_data sd[] = {
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
+
+static uint8_t mfg_data[] = { 0x00, 0x01 };
+static uint8_t uuid_data[] = { 0x00, 0x01, 0x02, 0x01, 0x05, 0x03, 0xff, 0x00, 0x01,
+                               0xA8, 0xA0, 0x92, 0x30, 0x11, 0x57,
+							//    0x6C, 0x05, 0xD3, 0x27, 0x70, 0xFB,
+							   0x00, };
+static const struct bt_data ad_wakeup[] = {
+    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0x80, 0x01),
+    BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL)),
+	BT_DATA(BT_DATA_MANUFACTURER_DATA, mfg_data, 2),
+	// BT_DATA(0x07, uuid_data, 16), // xiaomi Speaker wakeup
 };
 
 /* GATT 属性定义 */
@@ -304,7 +318,14 @@ static void advertising_continue(void)
             adv_param.id = g_id;
         }
 
-        err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+        if (g_wakeup_adv_mode == false) {
+            printk("Wait Pair advertising start ...\n");
+            err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+        } else {
+            printk("Wakeup advertising start ...\n");
+            err = bt_le_adv_start(&adv_param, ad_wakeup, ARRAY_SIZE(ad_wakeup), sd, ARRAY_SIZE(sd));
+        }
+
         if (err) {
             printk("Advertising failed to start (err %d)\n", err);
             return;
@@ -323,7 +344,30 @@ static void advertising_start(void)
     bt_foreach_bond(BT_ID_DEFAULT, bond_find, NULL);
 #endif
 
+    if (is_adv_running) {
+        printk("Advertising is alreay started, skip.\n");
+        return;
+    }
+
     k_work_submit(&adv_work);
+}
+
+static int advertising_stop(void)
+{
+    int err = -1;
+    if (!is_adv_running) {
+        return 0;
+    }
+
+    err = bt_le_adv_stop();
+    if (err) {
+        printk("Advertising failed to stop (err %d)\n", err);
+        return -1;
+    }
+
+    is_adv_running = false;
+
+    return 0;
 }
 
 static void advertising_process(struct k_work *work)
@@ -389,7 +433,8 @@ static inline struct bt_gatt_attr * get_attrs(void)
     return report_decl + 1;
 }
 
-static int cmd_send_key(const struct shell *sh, size_t argc, char **argv) {
+static int cmd_send_key(const struct shell *sh, size_t argc, char **argv)
+{
     if (argc < 2) return -EINVAL;
 
     uint8_t key = (uint8_t)strtol(argv[1], NULL, 16);
@@ -420,6 +465,47 @@ static int cmd_send_key(const struct shell *sh, size_t argc, char **argv) {
 
 SHELL_CMD_REGISTER(send, NULL, "Send keycode: send <hex>", cmd_send_key);
 
+static int cmd_start_adv(const struct shell *sh, size_t argc, char **argv)
+{
+    advertising_start();
+
+    return 0;
+}
+
+SHELL_CMD_REGISTER(start_adv, NULL, "Start ble adv", cmd_start_adv);
+
+struct k_work_delayable adv_mode_switch_work;
+
+static int cmd_wakeup(const struct shell *sh, size_t argc, char **argv)
+{
+    advertising_stop();
+
+    k_sleep(K_MSEC(100));
+
+    g_wakeup_adv_mode = true;
+    advertising_start();
+
+    k_work_reschedule(&adv_mode_switch_work, K_MSEC(500));
+
+    return 0;
+}
+
+SHELL_CMD_REGISTER(start_wakeup, NULL, "Send wakeup adv", cmd_wakeup);
+
+void adv_mode_switch_handler(struct k_work *work)
+{
+    int err = -1;
+
+    printk("adv mode switch handle.\n");
+
+    advertising_stop();
+
+    k_sleep(K_MSEC(100));
+
+    g_wakeup_adv_mode = false;
+    advertising_start();
+}
+
 int main(void) {
     int err;
 
@@ -429,17 +515,8 @@ int main(void) {
         return 0;
     }
 
-    #if 0
-    err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-    if (err) {
-        printk("Advertising failed to start (err %d)\n", err);
-        return 0;
-    }
-
-    printk("Advertising successfully started\n");
-    #endif
-
     k_work_init(&adv_work, advertising_process);
+    k_work_init_delayable(&adv_mode_switch_work, adv_mode_switch_handler);
 
     advertising_start();
 
