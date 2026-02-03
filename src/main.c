@@ -7,6 +7,7 @@
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/shell/shell.h>
+#include <zephyr/settings/settings.h>
 
 enum {
 	HIDS_REMOTE_WAKE = BIT(0),
@@ -46,6 +47,7 @@ static uint8_t simulate_input_allow;
 static uint8_t ctrl_point;
 
 /* HID 报告描述符: 键盘 */
+#if 0
 static const uint8_t report_map[] = {
     0x05, 0x01,       /* Usage Page (Generic Desktop) - 通用桌面设备 */
     0x09, 0x06,       /* Usage (Keyboard) - 明确是一个键盘 */
@@ -79,6 +81,62 @@ static const uint8_t report_map[] = {
 
     0xc0              /* End Collection - 结束应用集合 */
 };
+#endif
+
+/* copyed from miRC :
+ * $ adb shell cat /sys/class/input/event2/device/device/report_descriptor > mirc.bin
+ * $ hid-decode mirc.bin
+ * */
+static const uint8_t report_map[] = {
+    0x05, 0x01,                    // Usage Page (Generic Desktop)        0
+    0x09, 0x06,                    // Usage (Keyboard)                    2
+    0xa1, 0x01,                    // Collection (Application)            4
+    0x05, 0x07,                    //  Usage Page (Keyboard)              6
+    0x09, 0x06,                    //  Usage (c and C)                    8
+    0xa1, 0x01,                    //  Collection (Application)           10
+    0x85, 0x01,                    //   Report ID (1)                     12
+    0x95, 0x03,                    //   Report Count (3)                  14
+    0x75, 0x10,                    //   Report Size (16)                  16
+    0x15, 0x00,                    //   Logical Minimum (0)               18
+    0x25, 0xfe,                    //   Logical Maximum (254)             20
+    0x19, 0x00,                    //   Usage Minimum (0)                 22
+    0x29, 0xfe,                    //   Usage Maximum (254)               24
+    0x81, 0x00,                    //   Input (Data,Arr,Abs)              26
+    0xc0,                          //  End Collection                     28
+    0x06, 0x00, 0xff,              //  Usage Page (Vendor Defined Page 1) 29
+    0x09, 0x00,                    //  Usage (Undefined)                  32
+    0xa1, 0x01,                    //  Collection (Application)           34
+    0x85, 0x06,                    //   Report ID (6)                     36
+    0x75, 0x08,                    //   Report Size (8)                   38
+    0x95, 0x78,                    //   Report Count (120)                40
+    0x15, 0x00,                    //   Logical Minimum (0)               42
+    0x25, 0xff,                    //   Logical Maximum (255)             44
+    0x19, 0x00,                    //   Usage Minimum (0)                 46
+    0x29, 0xff,                    //   Usage Maximum (255)               48
+    0x81, 0x00,                    //   Input (Data,Arr,Abs)              50
+    0x85, 0x07,                    //   Report ID (7)                     52
+    0x75, 0x08,                    //   Report Size (8)                   54
+    0x95, 0x78,                    //   Report Count (120)                56
+    0x15, 0x00,                    //   Logical Minimum (0)               58
+    0x25, 0xff,                    //   Logical Maximum (255)             60
+    0x19, 0x00,                    //   Usage Minimum (0)                 62
+    0x29, 0xff,                    //   Usage Maximum (255)               64
+    0x81, 0x00,                    //   Input (Data,Arr,Abs)              66
+    0x85, 0x08,                    //   Report ID (8)                     68
+    0x75, 0x08,                    //   Report Size (8)                   70
+    0x95, 0x78,                    //   Report Count (120)                72
+    0x15, 0x00,                    //   Logical Minimum (0)               74
+    0x25, 0xff,                    //   Logical Maximum (255)             76
+    0x19, 0x00,                    //   Usage Minimum (0)                 78
+    0x29, 0xff,                    //   Usage Maximum (255)               80
+    0x81, 0x00,                    //   Input (Data,Arr,Abs)              82
+    0xc0,                          //  End Collection                     84
+    0xc0,                          // End Collection                      85
+};
+
+
+static volatile bool is_adv_running;
+static struct k_work adv_work;
 
 static ssize_t read_info(struct bt_conn *conn,
 			  const struct bt_gatt_attr *attr, void *buf,
@@ -144,6 +202,8 @@ static ssize_t write_ctrl_point(struct bt_conn *conn,
 	return len;
 }
 
+int g_id = -1;
+
 /* 定义广播数据 (Advertising Data) */
 static const struct bt_data ad[] = {
     // 1. 设置 Flags：一般设为有限发现模式或普通发现模式
@@ -195,16 +255,99 @@ BT_GATT_SERVICE_DEFINE(hid_svc,
 );
 
 
+static void advertising_continue(void)
+{
+	struct bt_le_adv_param adv_param;
+
+#if CONFIG_BT_DIRECTED_ADVERTISING
+	bt_addr_le_t addr;
+
+	if (!k_msgq_get(&bonds_queue, &addr, K_NO_WAIT)) {
+		char addr_buf[BT_ADDR_LE_STR_LEN];
+		int err;
+
+		if (is_adv_running) {
+			err = bt_le_adv_stop();
+			if (err) {
+				printk("Advertising failed to stop (err %d)\n", err);
+				return;
+			}
+			is_adv_running = false;
+		}
+
+		adv_param = *BT_LE_ADV_CONN_DIR(&addr);
+		adv_param.options |= BT_LE_ADV_OPT_DIR_ADDR_RPA;
+
+
+		err = bt_le_adv_start(&adv_param, NULL, 0, NULL, 0);
+
+		if (err) {
+			printk("Directed advertising failed to start (err %d)\n", err);
+			return;
+		}
+
+		bt_addr_le_to_str(&addr, addr_buf, BT_ADDR_LE_STR_LEN);
+		printk("Direct advertising to %s started\n", addr_buf);
+	} else
+#endif
+	{
+		int err;
+
+		if (is_adv_running) {
+			return;
+		}
+
+		adv_param = *BT_LE_ADV_CONN_FAST_1;
+		adv_param.options |= BT_LE_ADV_OPT_USE_IDENTITY;
+		if (g_id >= 0) {
+			printk("Use mac form g_id!\n");
+			adv_param.id = g_id;
+		}
+
+		err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+		if (err) {
+			printk("Advertising failed to start (err %d)\n", err);
+			return;
+		}
+
+		printk("Regular advertising started\n");
+	}
+
+	is_adv_running = true;
+}
+
+static void advertising_start(void)
+{
+#if CONFIG_BT_DIRECTED_ADVERTISING
+	k_msgq_purge(&bonds_queue);
+	bt_foreach_bond(BT_ID_DEFAULT, bond_find, NULL);
+#endif
+
+	k_work_submit(&adv_work);
+}
+
+static void advertising_process(struct k_work *work)
+{
+	advertising_continue();
+}
+
 /* 蓝牙连接回调 */
 static void connected(struct bt_conn *conn, uint8_t err)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
+	is_adv_running = false;
+
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	if (err) {
-		printk("Failed to connect to %s, err 0x%02x %s\n", addr,
-		       err, bt_hci_err_to_str(err));
+		if (err == BT_HCI_ERR_ADV_TIMEOUT) {
+			printk("Direct advertising to %s timed out\n", addr);
+			k_work_submit(&adv_work);
+		} else {
+			printk("Failed to connect to %s 0x%02x %s\n", addr, err,
+			       bt_hci_err_to_str(err));
+		}
 		return;
 	}
 
@@ -223,6 +366,8 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
 	printk("Disconnected from %s, reason 0x%02x %s\n", addr,
 	       reason, bt_hci_err_to_str(reason));
+
+	advertising_start();
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
@@ -284,14 +429,7 @@ int main(void) {
 		return 0;
 	}
 
-    /*
-    err = bt_conn_cb_register(&conn_callbacks);
-	if (err) {
-        printk("Connection callbacks register failed.\n")
-		return 0;
-    }
-    */
-
+    #if 0
     err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
@@ -299,6 +437,15 @@ int main(void) {
 	}
 
 	printk("Advertising successfully started\n");
+    #endif
+
+	k_work_init(&adv_work, advertising_process);
+
+	advertising_start();
+
+	if (IS_ENABLED(CONFIG_SETTINGS)) {
+		settings_load();
+	}
 
     while(1) {
 		k_sleep(K_MSEC(1000));
