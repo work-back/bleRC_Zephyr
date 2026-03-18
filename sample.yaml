@@ -1,6 +1,6 @@
 sample:
-  name: BLE Remount control
-  description: a ble RC
+  name: SZPI
+  description: SZPI
 common:
   min_ram: 2
   min_flash: 16
@@ -9,9 +9,9 @@ common:
     - native_sim
   harness: console
 tests:
-  sample.bluetooth.ble_rc:
+  sample.bluetooth.szpi:
     harness: bluetooth
-  sample.bluetooth.ble_rc.no_authentication:
+  sample.bluetooth.szpi.no_authentication:
     harness: bluetooth
     extra_configs:
       - CONFIG_SAMPLE_BT_USE_AUTHENTICATION=n
